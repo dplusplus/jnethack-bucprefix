@@ -1,0 +1,193 @@
+diff -aurbN -x.git jnethack-orig/README.bucprefix bucprefix/README.bucprefix
+--- jnethack-orig/README.bucprefix	1970-01-01 09:00:00.000000000 +0900
++++ bucprefix/README.bucprefix	2010-07-11 20:45:59.051989527 +0900
+@@ -0,0 +1,20 @@
++■概要
++インベントリでの祝呪表示をいじるパッチです。
++
++■解説
++O)ptionsからbucprefixを選択するか、.jnethackrc(Windowsではdefaults.nh)にOPTIONS=bucprefix:[0〜3までの数字]と書くことで変更できます。
++デフォルトでは普通の表示と同じです。
++
++以下にそれぞれの違いを述べます。
++
++0. (普通)
++	通常の、祝福された/呪われていない/呪われた の表示です。
++1. (Rubbish風)
++	{祝福}/{普通}/{被呪} の表示です。アイテム名の表示位置が揃って読みやすい利点があります。
++2. (FHSpatch風)
++	{祝福}/{普通}/{呪} の表示です。
++3. (Rubbish改)
++	[祝福]/[普通]/[被呪] の表示です。
++
++■ライセンス
++b/u/c prefix patchはNetHack General Public Licenseに基づき公開します。
+diff -aurbN -x.git jnethack-orig/include/config.h bucprefix/include/config.h
+--- jnethack-orig/include/config.h	2004-06-09 09:15:17.000000000 +0900
++++ bucprefix/include/config.h	2010-07-06 22:09:52.795294609 +0900
+@@ -359,6 +359,8 @@
+ /*# define USE_MAKESINGULAR */	/* Enable singularize */
+ #endif
+ 
++#define BUCPREFIX	/* more visible blessed/uncursed/cursed prefix */
++
+ /*
+  * Section 5:  EXPERIMENTAL STUFF
+  *
+diff -aurbN -x.git jnethack-orig/include/flag.h bucprefix/include/flag.h
+--- jnethack-orig/include/flag.h	2003-12-10 12:50:21.000000000 +0900
++++ bucprefix/include/flag.h	2010-07-06 23:18:44.831288218 +0900
+@@ -280,6 +280,9 @@
+ #define MAX_ALTKEYHANDLER 25
+ 	char	 altkeyhandler[MAX_ALTKEYHANDLER];
+ #endif
++#ifdef BUCPREFIX
++	int bucprefix;
++#endif
+ };
+ 
+ /*
+diff -aurbN -x.git jnethack-orig/src/objnam.c bucprefix/src/objnam.c
+--- jnethack-orig/src/objnam.c	2008-04-23 23:11:24.000000000 +0900
++++ bucprefix/src/objnam.c	2010-07-06 23:44:01.531322345 +0900
+@@ -1071,12 +1071,35 @@
+ /*JP
+ 		Strcat(prefix, "cursed ");
+ */
++#ifdef BUCPREFIX
++		switch(iflags.bucprefix){
++			case 1: Strcat(prefix, "{被呪}"); break;
++			case 2: Strcat(prefix, "{呪}"); break;
++			case 3: Strcat(prefix, "[被呪]"); break;
++			
++			case 0: /* fall through */
++			default: Strcat(prefix, "呪われた"); break;
++		}
++#else
+ 		Strcat(prefix, "呪われた");
++#endif
+ 	    else if (obj->blessed)
+ /*JP
+ 		Strcat(prefix, "blessed ");
+ */
++
++#ifdef BUCPREFIX
++		switch(iflags.bucprefix){
++			case 1: /* fall through */
++			case 2: Strcat(prefix, "{祝福}"); break;
++			case 3: Strcat(prefix, "[祝福]"); break;
++			
++			case 0: /* fall through */
++			default: Strcat(prefix, "祝福された"); break;
++		}
++#else
+ 		Strcat(prefix, "祝福された");
++#endif
+ 	    else if ((!obj->known || !objects[obj->otyp].oc_charged ||
+ 		      (obj->oclass == ARMOR_CLASS ||
+ 		       obj->oclass == RING_CLASS))
+@@ -1099,7 +1122,18 @@
+ /*JP
+ 		Strcat(prefix, "uncursed ");
+ */
++#ifdef BUCPREFIX
++		switch(iflags.bucprefix){
++			case 1: /* fall through */
++			case 2: Strcat(prefix, "{普通}"); break;
++			case 3: Strcat(prefix, "[普通]"); break;
++			
++			case 0: /* fall through */
++			default: Strcat(prefix, "呪われていない"); break;
++		}
++#else
+ 		Strcat(prefix, "呪われていない");
++#endif
+ 	}
+ 
+ /*JP
+diff -aurbN -x.git jnethack-orig/src/options.c bucprefix/src/options.c
+--- jnethack-orig/src/options.c	2005-06-08 01:37:52.000000000 +0900
++++ bucprefix/src/options.c	2010-07-08 20:50:34.599342133 +0900
+@@ -230,6 +230,9 @@
+ 	{ "boulder",  "巨岩を表示するシンボル文字",
+ 						1, SET_IN_GAME },
+ #endif /*JP*/
++#ifdef BUCPREFIX
++	{ "bucprefix",  "祝呪表示を変更する", 1, SET_IN_GAME },
++#endif
+ #if 0 /*JP*/
+ 	{ "catname",  "the name of your (first) cat (e.g., catname:Tabby)",
+ 						PL_PSIZ, DISP_IN_GAME },
+@@ -1285,6 +1288,27 @@
+ 		return;
+ 	}
+ 
++#ifdef BUCPREFIX
++	fullname = "bucprefix";
++	if (match_optname(opts, fullname, 4, TRUE)) {
++		op = string_for_opt(opts, FALSE);
++		
++		if (negated) {
++		    bad_negation("bucprefix", TRUE);
++		    return;
++		}
++		
++		switch(*op - '0'){
++			case 0: case 1: case 2: case 3:
++				iflags.bucprefix = *op - '0';
++				break;
++			default:
++				break;
++		}
++		return;
++	}
++#endif
++
+ 	fullname = "number_pad";
+ 	if (match_optname(opts, fullname, 10, TRUE)) {
+ 		boolean compat = (strlen(opts) <= 10);
+@@ -2797,6 +2821,30 @@
+      * Also takes care of interactive autopickup_exception_handling changes.
+ #endif
+      */
++#ifdef BUCPREFIX
++	if (!strcmp("bucprefix", optname)) {
++		static const char *bucpchoices[4] = 
++		{ "0 (普通)", "1 (Rubbish風)", "2 (FHSpatch風)", "3 (Rubbish改)" };
++		const char *bucpletters = "abcd";
++		menu_item *mode_pick = (menu_item *)0;
++		
++		tmpwin = create_nhwindow(NHW_MENU);
++		start_menu(tmpwin);
++		for (i = 0; i < SIZE(bucpchoices); i++) {
++			any.a_int = i + 1;
++			add_menu(tmpwin, NO_GLYPH, &any, bucpletters[i], 0,
++				ATR_NONE, bucpchoices[i], MENU_UNSELECTED);
++		}
++		
++		end_menu(tmpwin, "祝呪表示モードを選択してください：");
++		if (select_menu(tmpwin, PICK_ONE, &mode_pick) > 0) {
++			iflags.bucprefix = mode_pick->item.a_int - 1;
++			free((genericptr_t)mode_pick);
++		}
++	destroy_nhwindow(tmpwin);
++		retval = TRUE;
++	} else
++#endif
+     if (!strcmp("menustyle", optname)) {
+ 	const char *style_name;
+ 	menu_item *style_pick = (menu_item *)0;
+@@ -3329,6 +3377,13 @@
+ 	else if (!strcmp(optname, "boulder"))
+ 		Sprintf(buf, "%c", iflags.bouldersym ?
+ 			iflags.bouldersym : oc_syms[(int)objects[BOULDER].oc_class]);
++#ifdef BUCPREFIX
++	else if (!strcmp(optname, "bucprefix")){
++		static const char *bucpchoices[4] = {"0 (普通)", "1 (Rubbish風)", "2 (FHSparch風)", "3 (Rubbish改)"};
++		if (0 <= iflags.bucprefix && iflags.bucprefix < 4)
++			Sprintf(buf, "%s", bucpchoices[iflags.bucprefix]);
++	}
++#endif
+ 	else if (!strcmp(optname, "catname")) 
+ 		Sprintf(buf, "%s", catname[0] ? catname : none );
+ 	else if (!strcmp(optname, "disclose")) {
